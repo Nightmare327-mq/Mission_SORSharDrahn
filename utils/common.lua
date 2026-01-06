@@ -38,8 +38,8 @@ Load_settings=function ()
             Settings.general.Burn = true
             is_dirty = true
         end
-		if (Settings.general.BurnNamed == nil) then
-            Settings.general.BurnNamed = true
+		if (Settings.general.IgnoreStorms == nil) then
+            Settings.general.IgnoreStorms = true
             is_dirty = true
         end
 		if (Settings.general.OpenChest == nil) then
@@ -66,20 +66,6 @@ Load_settings=function ()
     mq.delay(10)
 	Logger.debug('Exiting WaitForNav()...')
 end
-
--- Refactored by hytiek
--- MoveToSpawn = function(spawn, distance)
---     if (distance == nil) then distance = 15 end
-
---     if (spawn == nil or spawn.ID() == nil) then return false end
---     if (spawn.Distance() < distance) then return true end
-
---     mq.cmdf('/squelch /nav id %d npc |dist=%s log=off', spawn.ID(), distance)
---     mq.delay(10)
---     while mq.TLO.Nav.Active() do mq.delay(10) end
---     mq.delay(500)
---     return true
--- end
 
 MoveToSpawn = function(spawn, distance)
     -- Logger.debug('spawn = '..spawn())
@@ -119,17 +105,6 @@ MoveTo = function(spawn_name, distance)
     return MoveToSpawn(spawn, distance)
 end
 
--- Old code.  Refactored by hytiek
--- MoveToAndTarget = function(spawn)
---     if MoveTo(spawn) == false then return false end
---     while mq.TLO.Target.CleanName() ~= mq.TLO.Spawn(spawn).CleanName() do 
---         mq.cmdf('/eqtarget %s npc', spawn) 
---         mq.delay(10)
---     end
---     mq.delay(250)
---     return true
--- end
-
 MoveToAndTarget = function(spawn_name)
     -- Logger.debug('spawn = '..spawn_name)
     if spawn_name ~= nil then
@@ -154,20 +129,6 @@ MoveToAndAct = function(spawn_name, cmd)
     mq.cmd(cmd)
     return true
 end
-
--- Old Code - refactored by hytiek
--- MoveToAndAttack = function(spawn)
---     if MoveTo(spawn) == false then return false end
---     while mq.TLO.Target.CleanName() ~= mq.TLO.Spawn(spawn).CleanName() do 
---         mq.cmdf('/eqtarget %s npc', spawn) 
---         mq.delay(10)
---     end
---     mq.delay(250)
---     if mq.TLO.Target.CleanName() == mq.TLO.Spawn(spawn).CleanName() and mq.TLO.Me.Combat() == false then 
---         mq.cmd('/attack on') 
---     end
---     return true
--- end
 
 MoveToTargetAndAttack = function(spawn_name)
     if MoveToAndTarget(spawn_name) == true then

@@ -1,7 +1,5 @@
--- Mission_TOBHazuri
--- Version 1.2
--- TODO: Implement bc support if asked for
--- TODO: Implement RGMercs.lua support if asked for (it has been)
+-- Mission_SORSharDrahn
+-- Version 1.0
 -- Error Reports:
 -- 
 ---------------------------
@@ -32,7 +30,7 @@ Settings = {
         Automation = 'CWTN',            -- automation method, 'CWTN' for the CWTN plugins, or 'rgmercs' for the rgmercs lua automation.  KissAssist is not really supported currently, though it might work
         PreManaCheck = true,           -- true to pause until the check for everyone's mana, endurance, hp is full before proceeding, false if it stalls at that point
         Burn = true,                    -- Whether we should burn by default. Some people have a bit of trouble handling the adds when they burn, so you are able to turn this off if you want
-        BurnNamed = true,               -- There are a lot of add mechanics that can mostly be avoided if you have the DPS to burn the named. If true, you will ignore adds and storms to just burn the named
+        IgnoreStorms = true,            -- There are a lot of add mechanics that can mostly be avoided if you have the DPS to burn the named. If true, you will ignore adds and storms to just burn the named
         OpenChest = false,              -- true if you want to open the chest automatically at the end of the mission run. I normally do not do this as you can swap toon's out before opening the chest to get the achievements
         WriteCharacterIni = true,       -- Write/read character specific ini file to be able to run different groups with different parameters.  This must be changed in this section of code to take effect
     }
@@ -49,6 +47,7 @@ end
 Logger.info('\awAutomation: \ay%s', Settings.general.Automation)
 Logger.info('\awPreManaCheck: \ay%s', Settings.general.PreManaCheck)
 Logger.info('\awBurn: \ay%s', Settings.general.Burn)
+Logger.info('\awIgnore Storms: \ay%s', Settings.general.IgnoreStorms)
 Logger.info('\awOpen Chest: \ay%s', Settings.general.OpenChest)
 Logger.info('\awWrite Character Ini: \ay%s\aw.', Settings.general.WriteCharacterIni)
 if (Settings.general.WriteCharacterIni == true) then
@@ -197,24 +196,24 @@ while true do
 		break
 	end
 
-    if mq.TLO.SpawnCount('storm call npc')() > 0 and Settings.general.BurnNamed == false then 
+    if mq.TLO.SpawnCount('storm call npc')() > 0 and Settings.general.IgnoreStorms == false and mq.TLO.Spawn('storm call npc').Distance() > 20 then 
         StopAttack()
         mq.cmd('/nav spawn storm call')
         WaitForNav()
-    elseif mq.TLO.SpawnCount('Elder Monolith npc')() > 0 and Settings.general.BurnNamed == false then 
+    elseif mq.TLO.SpawnCount('Elder Monolith npc')() > 0 and Settings.general.IgnoreStorms == false then 
         if (section ~= 2) then 
             section = 2
             Logger.info('Killing Elder Monolith...')
         end
         MoveToTargetAndAttack('Elder Monolith')
-    elseif mq.TLO.SpawnCount('Younger npc')() > 0 and Settings.general.BurnNamed == false then 
+    elseif mq.TLO.SpawnCount('Younger npc')() > 0 and Settings.general.IgnoreStorms == false then 
         -- Need actual name of this mob that spawns with only 1 in the storm
         if (section ~= 3) then 
             section = 3
             Logger.info('Killing Younger...')
         end
         MoveToTargetAndAttack('Younger')
-    elseif mq.TLO.SpawnCount('lost constituent npc')() > 0 and Settings.general.BurnNamed == false then 
+    elseif mq.TLO.SpawnCount('lost constituent npc')() > 0 and Settings.general.IgnoreStorms == false then 
         if (section ~= 4) then 
             section = 4
             Logger.info('Killing a lost constituent...')
