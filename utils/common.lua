@@ -38,6 +38,10 @@ Load_settings=function ()
             Settings.general.Burn = true
             is_dirty = true
         end
+        if (Settings.general.UseGlyphs == nil) then
+            Settings.general.UseGlyphs = false
+            is_dirty = true
+        end
 		if (Settings.general.IgnoreStorms == nil) then
             Settings.general.IgnoreStorms = true
             is_dirty = true

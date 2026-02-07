@@ -30,23 +30,25 @@ Settings = {
         Automation = 'CWTN',            -- automation method, 'CWTN' for the CWTN plugins, or 'rgmercs' for the rgmercs lua automation.  KissAssist is not really supported currently, though it might work
         PreManaCheck = true,           -- true to pause until the check for everyone's mana, endurance, hp is full before proceeding, false if it stalls at that point
         Burn = true,                    -- Whether we should burn by default. Some people have a bit of trouble handling the adds when they burn, so you are able to turn this off if you want
+        UseGlyphs = false,              -- If you want to use glyphs on all characters to try and burn before any Elder's spawn
         IgnoreStorms = true,            -- There are a lot of add mechanics that can mostly be avoided if you have the DPS to burn the named. If true, you will ignore adds and storms to just burn the named
         OpenChest = false,              -- true if you want to open the chest automatically at the end of the mission run. I normally do not do this as you can swap toon's out before opening the chest to get the achievements
         WriteCharacterIni = true,       -- Write/read character specific ini file to be able to run different groups with different parameters.  This must be changed in this section of code to take effect
     }
 }
 -- #endregion
-
+Load_settings()
 
 Logger.info('\awGroup Chat: \ay%s', Settings.general.GroupMessage)
-if (Settings.general.GroupMessage ~= 'dannet' and Settings.general.GroupMessage ~= 'bc')  then
-   Logger.info("Unknown or invalid group command. Must be either 'dannet' or 'bc'. Ending script. \ar")
+if (Settings.general.GroupMessage ~= 'dannet')  then
+   Logger.info("Unknown or invalid group command. Must be 'dannet'. Ending script. \ar")
    os.exit()
 end
 
 Logger.info('\awAutomation: \ay%s', Settings.general.Automation)
 Logger.info('\awPreManaCheck: \ay%s', Settings.general.PreManaCheck)
 Logger.info('\awBurn: \ay%s', Settings.general.Burn)
+Logger.info('\awUse Glyphs: \ay%s', Settings.general.UseGlyphs)
 Logger.info('\awIgnore Storms: \ay%s', Settings.general.IgnoreStorms)
 Logger.info('\awOpen Chest: \ay%s', Settings.general.OpenChest)
 Logger.info('\awWrite Character Ini: \ay%s\aw.', Settings.general.WriteCharacterIni)
@@ -117,29 +119,6 @@ while Settings.general.PreManaCheck == true and Ready == false do
     TaskCheck(Task_Name)
 end
 
--- in case you are starting the script after you are in the mission zone - need to determine what area you are close to
--- if (mq.TLO.Me.X() < 270 and mq.TLO.Me.Y() > -190) then
---     Logger.debug('Top section by zone in: X:%s Y:%s', mq.TLO.Me.X(), mq.TLO.Me.Y())
---     Logger.info('Doing some setup. Invising and moving to camp spot.')
-
---     GroupInvis(1)
-
---     mq.delay(2000)
-
---     -- Nav in 2 steps to avoid mobs if at all possible
---     mq.cmd('/squelch /dgga /nav locyx -50 152 log=off')
---     WaitForNav()
-
---     mq.cmd('/squelch /dgga /nav locyx -286 -282 log=off')
---     WaitForNav()
--- end
--- if math.abs(mq.TLO.Me.Y() + 286) > 15 or math.abs(mq.TLO.Me.X() + 282) > 15 then
---     -- We are not near the camp spot, so lets move there
---     Logger.info('Moving to camp spot...')
---     mq.cmd('/squelch /dgga /nav locyx -286 -282 log=off')
---     WaitForNav()
--- end
-
 Logger.info('Doing some setup...')
 
 DoPrep()
@@ -154,23 +133,6 @@ mq.delay(10000)
 Logger.info('Starting the event...')
 MoveToAndSay('Gwark', 'insist')
 
--- mq.cmdf('/%s gotocamp', my_class)
--- mq.cmd('/squelch /nav locyx -240 50 log=off')
--- WaitForNav()
-
--- This section was waiting till all the starting adds were killed to do the rest of the script
-
--- Logger.info('Killing the 4 initial adds...')
--- while mq.TLO.SpawnCount("Hazuri xtarhater")() < 1 do
---     if (mq.TLO.SpawnCount('unmodified experiment npc radius 60')() > 0) then
---         Logger.debug('experiment Attack branch...')
---         MoveToTargetAndAttack('unmodified experiment')
---     end
--- 	mq.delay(1000)
---     ZoneCheck(quest_zone)
---     TaskCheck(Task_Name)
--- end
-
 local event_zoned = function(line)
     -- zoned so quit
     Command = 1
@@ -183,6 +145,16 @@ end
 
 mq.event('Zoned','LOADING, PLEASE WAIT...#*#',event_zoned)
 mq.event('Failed','#*#summons overwhelming enemies and your mission fails.#*#',event_failed)
+
+if (Settings.general.UseGlyphs == true) then 
+    mq.cmd('/dgga /timed 10 /alt act 5305')
+    mq.cmd('/dgga /timed 11 /alt act 5304')
+    mq.cmd('/dgga /timed 12 /alt act 5303')
+
+    mq.cmd('/dgga /timed 30 /alt act 5305')
+    mq.cmd('/dgga /timed 31 /alt act 5304')
+    mq.cmd('/dgga /timed 32 /alt act 5303')
+end
 
 while true do
 	mq.doevents()
