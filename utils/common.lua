@@ -1,4 +1,6 @@
 local mq = require('mq')
+
+-- #region local Variables
 local config_path = ''
 local my_class = mq.TLO.Me.Class.ShortName()
 local my_name = mq.TLO.Me.CleanName()
@@ -6,10 +8,76 @@ local cwtn_StartingMode = mq.TLO.CWTN.Mode()
 
 local task = mq.TLO.Task(Task_Name)
 
+-- Lookup table: Class ShortName -> CWTN Plugin Name
+local classPluginLookup = {
+    BER = 'MQ2BerZerker',
+    BRD = 'MQ2Bard',
+    BST = 'Mq2Bst',
+    CLR = 'Mq2Cleric',
+    DRU = 'Mq2Druid',
+    ENC = 'MQ2Enchanter',
+    MAG = 'MQ2Mage',
+    MNK = 'MQ2Monk',
+    NEC = 'MQ2Necro',
+    PAL = 'Mq2Paladin',
+    RNG = 'MQ2Ranger',
+    ROG = 'MQ2Rogue',
+    SHD = 'MQ2Eskay',
+    SHM = 'MQ2Shaman',
+    WAR = 'MQ2War',
+    WIZ = 'MQ2Wizard',
+}
+
+-- #endregion
+
+-- #region local functions
 local function file_exists(name)
 	local f = io.open(name, "r")
 	if f ~= nil then io.close(f) return true else return false end
 end
+
+-- Reload CWTN plugins for all non-mercenary group members
+--- Skips mercenaries automatically
+local function ReloadGroupCWTNPlugins()
+    local groupSize = mq.TLO.Me.GroupSize() or 0
+    local grouperRunning = mq.TLO.Lua.Script('grouper').Status() == 'RUNNING'
+    
+    -- 0 = self, 1..GroupSize = other members
+    for i = 0, groupSize do
+        local member = mq.TLO.Group.Member(i)
+
+        if member() and member.Present() then
+            -- Skip mercenaries
+            if member.Mercenary() then
+                Logger.info('Skipping mercenary in group slot %s', i)
+            else
+                local name = member.Name()
+                local classShort = member.Class.ShortName()
+                local pluginName = classPluginLookup[classShort]
+
+                if pluginName then
+                    if name == mq.TLO.Me.Name() then 
+                        mq.cmdf('/timed 50 /plugin %s unload', pluginName) 
+                        mq.cmdf('/timed 100 /plugin %s load', pluginName) 
+                        Logger.info('Local Plugin reset on %s (%s) %s', name, classShort, pluginName)
+                        if grouperRunning == true then mq.cmd('/timed 200 /lua run grouper') end
+                    else
+                        mq.cmdf('/dex %s /plugin %s unload', name, pluginName)
+                        mq.cmdf('/dex %s /timed 10 /plugin %s', name, pluginName)
+                        Logger.info('Remote Plugin reset on %s (%s) %s', name, classShort, pluginName)
+                    end
+                    
+                else
+                    Logger.info('No plugin mapping for %s (%s)', name, classShort)
+                end
+            end
+        end
+    end
+end
+
+-- #endregion
+
+-- #region Global functions 
 
 Load_settings=function ()
     local config_dir = mq.configDir:gsub('\\', '/') .. '/'
@@ -44,6 +112,10 @@ Load_settings=function ()
         end
 		if (Settings.general.IgnoreStorms == nil) then
             Settings.general.IgnoreStorms = true
+            is_dirty = true
+        end
+        if (Settings.general.StormCallOneChar == nil) then
+            Settings.general.StormCallOneChar = ''
             is_dirty = true
         end
 		if (Settings.general.OpenChest == nil) then
@@ -348,7 +420,7 @@ GroupInvis = function(mode)
     if mode == nil then mode = 3 end
     if mode ~= 1 and mode ~= 2 and mode ~= 3 then 
         Logger.info('You called the Invis routine with an incorrect parameter (%s). You must call it with a 1, 2, or 3', mode)
-        os.exit()
+        mq.exit()
     end
     while not All_Invis(mode) do
         The_Invis_Thing(mode)
@@ -373,6 +445,33 @@ CheckGroupStats = function()
     end
 	-- mq.delay(5000)
     return ready
+end
+
+CheckGroupName = function(member_name)
+	local in_group = false
+	local groupSize = mq.TLO.Group()
+    if mq.TLO.Group.AnyoneMissing() then return false end
+   
+    for i = groupSize, 0, -1 do
+        if mq.TLO.Group.Member(i).Mercenary() ~= true then 
+            if mq.TLO.Group.Member(i).CleanName() == member_name then in_group = true end
+        end
+    end
+    return in_group
+end
+
+CheckGroupName_Class = function(member_name)
+	local class_name = ''
+	local groupSize = mq.TLO.Group()
+    if mq.TLO.Group.AnyoneMissing() then return class_name end
+   
+    for i = groupSize, 0, -1 do
+        if mq.TLO.Group.Member(i).Mercenary() ~= true then 
+            if mq.TLO.Group.Member(i).CleanName() == member_name then class_name = mq.TLO.Group.Member(i).Class.ShortName() end
+            
+        end
+    end
+    return class_name
 end
 
 -- Function to check the distance of all group members
@@ -458,7 +557,7 @@ ZoneIn = function(npcName, zoneInPhrase, quest_zone)
         counter = counter + 1
         if counter >= 10 then 
             Logger.info('Not able to zone into the %s. Look at the issue and fix it please.', quest_zone)
-            os.exit()
+            mq.exit()
         end
         mq.delay(5000)
     end
@@ -480,7 +579,7 @@ Task = function(task_name, request_zone, request_npc, request_phrase)
     if (task() == nil) then
         if (mq.TLO.Zone.ShortName() ~= request_zone) then
             Logger.info('Not In %s to request task.  Move group to that zone and restart.', request_zone)
-            os.exit()
+            mq.exit()
         end
 
         MoveToAndSay(request_npc, request_phrase)
@@ -494,14 +593,14 @@ Task = function(task_name, request_zone, request_npc, request_phrase)
 
             if (index >= 5) then
                 Logger.info('Unable to get quest. Exiting.')
-                os.exit()
+                mq.exit()
             end
             Logger.info('...waiting for quest.')
         end
 
         if (task() == nil) then
             Logger.info('Unable to get quest. Exiting.')
-            os.exit()
+            mq.exit()
         end
 
         Logger.info('\at Got quest.')
@@ -510,7 +609,7 @@ Task = function(task_name, request_zone, request_npc, request_phrase)
 
     if (task() == nil) then
         Logger.info('Problem requesting or getting task.  Exiting.')
-        os.exit()
+        mq.exit()
     end
     return task
 end
@@ -561,7 +660,7 @@ TaskCheck = function(task_name)
     if (task_check() == nil) then 
         Logger.info('You no longer have the mission task.  Ending the script...')
         ClearStartingSetup()
-        os.exit()
+        mq.exit()
     end
 end
 
@@ -599,7 +698,7 @@ ZoneCheck = function(quest_zone)
     if mq.TLO.Zone.ShortName() ~= quest_zone then 
         Logger.info('You are no longer in the mission zone.  Ending the script...')
         ClearStartingSetup()
-        os.exit()
+        mq.exit()
     end
 end
 
@@ -629,17 +728,34 @@ end
 ClearStartingSetup = function()
     mq.delay(2000)
     if Settings.general.Automation == 'CWTN' then 
-        mq.cmdf('/%s mode %s nosave', my_class, cwtn_StartingMode)
-        mq.cmdf('/%s pause off', my_class)
-        mq.cmdf('/%s checkprioritytarget on nosave', my_class)
+        Logger.info('Resetting all group CWTN plugins to reset all settings to base...Waiting 5 seconds')
+        mq.delay(5000)
+        ReloadGroupCWTNPlugins()
+    elseif Settings.general.Automation == 'rgmercs' then 
+        --TODO: Finish Automation Setup
+    elseif Settings.general.Automation == 'KA' then 
+        --TODO: Finish Automation Setup
+    else
+        print('Unknown Automation method!  I am not sure how you got this far with this entry, but we need to stop the script now!')
+        printf('Current Automation method in the ini: %s', Settings.general.Automation)
+        mq.exit()        
     end
+    mq.delay(5000)
+    -- mq.cmd('/dgga /boxr unpause')
+    -- mq.cmd('/dgga /timed 15 /boxr unpause')
 end
 
 Action_OpenChest = function()
     mq.cmd('/squelch /nav spawn _chest | log=off')
     mq.delay(250)
-    while mq.TLO.Nav.Active() do mq.delay(5) end
-    mq.cmd('/eqtarget _chest')
+    WaitForNav()
+    mq.cmd('/target _chest')
+    mq.delay(250)
+    mq.cmd('/open')
+    mq.delay(250)
+    mq.cmd('/target _chest')
     mq.delay(250)
     mq.cmd('/open')
 end
+
+-- #endregion

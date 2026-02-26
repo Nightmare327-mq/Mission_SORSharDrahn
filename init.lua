@@ -16,6 +16,7 @@ Command = 0
 
 local Ready = false
 local my_class = mq.TLO.Me.Class.ShortName()
+local cwtn_alias = '/docommand /${Me.Class.ShortName}'
 local request_zone = 'ruinedrelic'
 local request_npc = 'Gwork'
 local request_phrase = 'smaller'
@@ -23,15 +24,18 @@ local zonein_phrase = 'ready'
 local quest_zone = 'ruinedrelic_mission'
 local delay_before_zoning = 30000  -- 27s
 local section = 0
+local FirstStormCall = false
+local FirstStormCallClass = ''
 
 Settings = {
     general = {
         GroupMessage = 'dannet',        -- or "bc" - not yet implemented
         Automation = 'CWTN',            -- automation method, 'CWTN' for the CWTN plugins, or 'rgmercs' for the rgmercs lua automation.  KissAssist is not really supported currently, though it might work
-        PreManaCheck = true,           -- true to pause until the check for everyone's mana, endurance, hp is full before proceeding, false if it stalls at that point
+        PreManaCheck = true,            -- true to pause until the check for everyone's mana, endurance, hp is full before proceeding, false if it stalls at that point
         Burn = true,                    -- Whether we should burn by default. Some people have a bit of trouble handling the adds when they burn, so you are able to turn this off if you want
         UseGlyphs = false,              -- If you want to use glyphs on all characters to try and burn before any Elder's spawn
         IgnoreStorms = true,            -- There are a lot of add mechanics that can mostly be avoided if you have the DPS to burn the named. If true, you will ignore adds and storms to just burn the named
+        StormCallOneChar = '',          -- Place a character name in this entry to have that toon pause and run to the first storm call that happens to give you enough time to kill the named before an Elder Spawns
         OpenChest = false,              -- true if you want to open the chest automatically at the end of the mission run. I normally do not do this as you can swap toon's out before opening the chest to get the achievements
         WriteCharacterIni = true,       -- Write/read character specific ini file to be able to run different groups with different parameters.  This must be changed in this section of code to take effect
     }
@@ -42,43 +46,57 @@ Load_settings()
 Logger.info('\awGroup Chat: \ay%s', Settings.general.GroupMessage)
 if (Settings.general.GroupMessage ~= 'dannet')  then
    Logger.info("Unknown or invalid group command. Must be 'dannet'. Ending script. \ar")
-   os.exit()
+   mq.exit()
 end
+
+
 
 Logger.info('\awAutomation: \ay%s', Settings.general.Automation)
 Logger.info('\awPreManaCheck: \ay%s', Settings.general.PreManaCheck)
 Logger.info('\awBurn: \ay%s', Settings.general.Burn)
 Logger.info('\awUse Glyphs: \ay%s', Settings.general.UseGlyphs)
 Logger.info('\awIgnore Storms: \ay%s', Settings.general.IgnoreStorms)
+Logger.info('\awStorm Call One Character: \ay%s', Settings.general.StormCallOneChar)
+if(Settings.general.StormCallOneChar ~= '') then 
+    if CheckGroupName(Settings.general.StormCallOneChar) == false then 
+        Logger.info("\arInvalid character name for this group. You can only use a character name that is in your current group.  Exiting script until you fix the issue.\ar")
+        mq.exit()
+    else
+        FirstStormCallClass  = CheckGroupName_Class(Settings.general.StormCallOneChar)
+    end
+    Logger.debug('StormCallOneChar %s', Settings.general.StormCallOneChar)
+    Logger.debug('FirstStormCallClass %s', FirstStormCallClass)
+end
 Logger.info('\awOpen Chest: \ay%s', Settings.general.OpenChest)
 Logger.info('\awWrite Character Ini: \ay%s\aw.', Settings.general.WriteCharacterIni)
 if (Settings.general.WriteCharacterIni == true) then
     Load_settings()
 elseif (Settings.general.WriteCharacterIni == false) then
+    -- THis section does nothing, since the user has it set to not write or read the ini file
 else
     Logger.info("\awWrite Character Ini: %s \ar Invalid value. You can only use true or false.  Exiting script until you fix the issue.\ar", Settings.general.WriteCharacterIni)
-    os.exit()
+    mq.exit()
 end
 
 if my_class ~= 'WAR' and my_class ~= 'SHD' and my_class ~= 'PAL' then 
 	Logger.info('You must run the script on a tank class...')
-	os.exit()
+	mq.exit()
 end
 mq.cmdf('/%s pause on', my_class)
 
 if mq.TLO.Me.Combat() == true then 
     Logger.info('You started the script while you are in Combat.  Please kill the mobs first, then restart the script. Exiting script...')
-	os.exit()
+	mq.exit()
 end
 
 if mq.TLO.Group.AnyoneMissing() then
     Logger.info('You started the script, but not everyone is actually in zone with you. Exiting script...')
-    os.exit()
+    mq.exit()
 end
 
 if CheckGroupDistance(50) ~= true then 
     Logger.info('You started the script, but not everyone is within 50 feet of you. Exiting script...')
-    os.exit()
+    mq.exit()
 end
 
 if Zone_name == request_zone then 
@@ -94,7 +112,7 @@ if Zone_name == request_zone then
     local allinzone = WaitForGroupToZone(600)
     if allinzone == false then
         Logger.info('Timeout while waiting for everyone to zone in.  Please check what is happening and restart the script')
-        os.exit()
+        mq.exit()
     end
 end
 
@@ -102,12 +120,12 @@ Zone_name = mq.TLO.Zone.ShortName()
 
 if Zone_name ~= quest_zone then 
 	Logger.info('You are not in the mission...')
-	os.exit()
+	mq.exit()
 end
 
 if mq.TLO.Group.AnyoneMissing() then
     Logger.info('You started the script in the mission zone, but not everyone is actually in zone.  Exiting script...')
-    os.exit()
+    mq.exit()
 end
 -- Check group mana / endurance / hp
 while Settings.general.PreManaCheck == true and Ready == false do 
@@ -156,6 +174,7 @@ if (Settings.general.UseGlyphs == true) then
     mq.cmd('/dgga /timed 32 /alt act 5303')
 end
 
+
 while true do
 	mq.doevents()
 
@@ -172,6 +191,14 @@ while true do
         StopAttack()
         mq.cmd('/nav spawn storm call')
         WaitForNav()
+    elseif mq.TLO.SpawnCount('storm call npc')() > 0 and FirstStormCall == false and Settings.general.StormCallOneChar ~= '' then
+        mq.cmdf('/dex %s /%s pause on', Settings.general.StormCallOneChar, FirstStormCallClass)
+        mq.cmdf('/dex %s /nav spawn npc storm call', Settings.general.StormCallOneChar)
+        mq.cmdf('/timed 2 /dex %s /nav spawn npc storm call', Settings.general.StormCallOneChar)
+        mq.cmdf('/timed 5 /dex %s /nav spawn npc storm call', Settings.general.StormCallOneChar)
+        mq.cmdf('/dex %s /timed 200 /%s pause off', Settings.general.StormCallOneChar, FirstStormCallClass) -- Reactivate after 20 seconds
+        -- set the flag to true so it will no longer trigger this section
+        FirstStormCall = true
     elseif mq.TLO.SpawnCount('Elder Monolith npc')() > 0 and Settings.general.IgnoreStorms == false then 
         if (section ~= 2) then 
             section = 2
